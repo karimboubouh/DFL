@@ -10,7 +10,7 @@ from src.conf import EVAL_ROUND, WAIT_TIMEOUT, WAIT_INTERVAL, ML_ENGINE, PORT
 from src.ml import GAR, model_inference, compress_model, uncompress_model
 from src.p2p import Graph, Node
 from src.plots import w_heatmaps
-from src.utils import log, wait_until
+from src.utils import log, wait_until, save
 
 name = "Decentralized Federated Learning (DFL)"
 
@@ -19,6 +19,7 @@ name = "Decentralized Federated Learning (DFL)"
 
 def collaborate(graph: Graph, args):
     eng = matlab.engine.start_matlab()
+    Optimized = []
     prev_freq = [2e9] * len(graph.peers)
     prev_gamma = 1
     log("info", f"Initializing DFL...")
@@ -47,6 +48,7 @@ def collaborate(graph: Graph, args):
             else:
                 prev_freq = freq
                 prev_gamma = gamma
+            Optimized.append({'w': W, 'w_p': w_p, 'freq': freq, 'gamma': gamma})
         else:
             w_p, freq, gamma = None, None, None
         # Execute the training step
@@ -60,6 +62,8 @@ def collaborate(graph: Graph, args):
     graph.join()
     log('info', f"Graph G disconnected.")
 
+    # Save Optimized
+    save("optimized_W10X10_001", Optimized)
     # get collaboration logs
     times = [peer.params.train_time for peer in graph.peers]
     total_cp_energy = sum([peer.params.cp_energy for peer in graph.peers])
@@ -216,12 +220,15 @@ def optimize_w(eng, W, R, info=True, heatmap=False, threshold=0.001):
     if info:
         log('warning', f"Initial W has {np.sum(W < threshold)} zero elements | "
                        f"W_p has {np.sum(W_p < threshold)} zero elements")
-        row_sums = np.round(W_p.sum(axis=1), 3)
-        col_sums = np.round(W_p.sum(axis=0), 3)
-        log('log', f"W_p ==> Sum of rows: {row_sums} | Sum of cols: {col_sums} | ")
-        log('result', f"W ==>\n{np.round(W, 3)}")
-        log('result', f"W_p ==>\n{np.round(W_p, 3)}")
-        print(f"Gamma ==> {G} | F ==> {[x[0] for x in F]}")
+        row_sums = np.round(W.sum(axis=1), 4)
+        col_sums = np.round(W.sum(axis=0), 4)
+        log('warning', f"W ==>\n\tSum of rows: {row_sums}\n\tSum of cols: {col_sums} | ")
+        row_sums = np.round(W_p.sum(axis=1), 4)
+        col_sums = np.round(W_p.sum(axis=0), 4)
+        log('warning', f"W_p ==>\n\tSum of rows: {row_sums}\n\tSum of cols: {col_sums} | ")
+        log('result', f"W ==>\n{np.round(W, 4)}")
+        log('result', f"W_p ==>\n{np.round(W_p, 4)}")
+        log('success', f"Gamma ==> {G} | Freq ==> {[int(x[0]) for x in F]}")
     if heatmap:
         w_heatmaps(W, W_p, threshold=0.01)
     return W_p, F, G

@@ -18,7 +18,7 @@ if __name__ == '__main__':
     args.iid = 0
     args.unequal = 1
     args.num_users = 10
-    args.rounds = 10
+    args.rounds = 20
     args.verbose = 10
     # =================================
     fixed_seed(False)
@@ -38,6 +38,6 @@ if __name__ == '__main__':
              f"Test Scope: {args.test_scope}")
     info = {'xlabel': "Rounds", 'title': title}
     data = {'train': train_logs, 'energy': energy_logs, 'time': time_logs}
-    save(f"cifar_{args.num_users}_{args.rounds}_opt_{args.optimize_network}_{args.optimize_model}_gamma_{1}", data)
+    save(f"{args.dataset}_{args.num_users}_{args.rounds}_opt_{args.optimize_network}_{args.optimize_model}", data)
     plot_train_history(train_logs, metric='accuracy', measure="mean-std", info=info)
     print("END.")

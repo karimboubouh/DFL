@@ -179,8 +179,8 @@ def compress_model(model, gamma, pid=None):
     compressed_size = sum(len(param["values"]) for param in compressed_model.values())
     savings = 100 * (1 - compressed_size / original_size)
     if pid is not None and pid == 0:
-        log('event', f"Compression Savings: Reduced model size by {savings:.4f}% "
-                    f"({compressed_size} out of {original_size})")
+        log('event', f"Compression Savings: Reduced model size by (gamma={gamma})  {savings:.4f}% "
+                     f"({compressed_size} out of {original_size})")
 
     return compressed_model, {'original': original_size, 'compressed': compressed_size}
 
