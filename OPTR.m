@@ -60,7 +60,8 @@ prob = optimproblem;
 %creating the optimization variables
 Z = optimvar('Z',N,N,'LowerBound',zer,'UpperBound',oness);
 gam = optimvar('gam',1,'LowerBound',0.1,'UpperBound',0.9);
-f = optimvar('f',N,'LowerBound',10^6,'UpperBound',10^9);
+%f = optimvar('f',N,'LowerBound',10^6,'UpperBound',10^9);
+f = optimvar('f',N,'LowerBound',0.5*10^9,'UpperBound',5*10^9);
 
 %now lets define the constraints
 consz = optimeq(N,N);
