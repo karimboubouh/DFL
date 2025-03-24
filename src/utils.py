@@ -91,7 +91,7 @@ def args_parser():
                         help='whether to use unequal data splits for  \
                         non-i.i.d setting (use 0 for equal splits)')
     parser.add_argument('--verbose', type=int, default=2, help='verbose')
-    parser.add_argument('--seed', type=int, default=10, help='random seed')
+    parser.add_argument('--seed', type=int, default=18, help='random seed')
     global args
     args = parser.parse_args()
     return args
@@ -399,7 +399,7 @@ def save(filename, data):
 
 
 def load(filename):
-    with open(f"../out/{filename}", 'rb') as fp:
+    with open(f"./out/{filename}", 'rb') as fp:
         return pickle.load(fp)
 
 

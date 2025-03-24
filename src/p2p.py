@@ -157,8 +157,8 @@ class Node(Thread):
 
         return history
 
-    def train_one_epoch(self, batches=1, evaluate=False):
-        return train_for_x_epoch(self, batches, evaluate)
+    def train_one_epoch(self, batches=None, evaluate=False):
+        return train_for_x_epoch(self, 1, batches, evaluate)
 
     def train_grads(self):
         return train_grads(self)

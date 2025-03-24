@@ -18,10 +18,10 @@ if __name__ == '__main__':
     args.iid = 0
     args.unequal = 1
     args.num_users = 10
-    args.rounds = 20
+    args.rounds = 10
     args.verbose = 10
     # =================================
-    fixed_seed(False)
+    fixed_seed(True)
     # print experiment details
     exp_details(args)
     # load dataset and initialize user groups

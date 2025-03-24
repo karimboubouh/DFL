@@ -10,7 +10,7 @@ from src.conf import EVAL_ROUND, WAIT_TIMEOUT, WAIT_INTERVAL, ML_ENGINE, PORT
 from src.ml import GAR, model_inference, compress_model, uncompress_model
 from src.p2p import Graph, Node
 from src.plots import w_heatmaps
-from src.utils import log, wait_until, save
+from src.utils import log, wait_until, load
 
 name = "Decentralized Federated Learning (DFL)"
 
@@ -19,7 +19,10 @@ name = "Decentralized Federated Learning (DFL)"
 
 def collaborate(graph: Graph, args):
     eng = matlab.engine.start_matlab()
-    Optimized = []
+    savedW = load("Optimized_W10_201.pkl")
+    savedW = None
+    if savedW:
+        log("info", f"Using previously optimized W...")
     prev_freq = [2e9] * len(graph.peers)
     prev_gamma = 1
     log("info", f"Initializing DFL...")
@@ -32,24 +35,34 @@ def collaborate(graph: Graph, args):
     T = tqdm(range(graph.args.rounds), position=0)
     for t in T:
         # get new connectivity matrix
-        W = graph.update_connectivity_matrix(rho=np.random.uniform(0.7, 1))
+        if savedW:
+            W = savedW[t]["w"]
+        else:
+            W = graph.update_connectivity_matrix(rho=np.random.uniform(0.7, 1))
+            print(W)
         # update peers set of neighbors
         for i, peer in enumerate(graph.peers):
             peer.params.neighbors = W[i]
         # optimize the network
-        log('event', f"Network has been updated")
         if graph.args.optimize_network:
-            log('', f"Optimizing W...")
-            w_p, freq, gamma = optimize_w(eng, W, t, info=True, heatmap=False)
-            if w_p is None:
-                w_p = W
-                freq = prev_freq
-                gamma = prev_gamma
+            if savedW:
+                w_p = savedW[t]["w_p"]
+                freq = savedW[t]["freq"]
+                gamma = savedW[t]["gamma"]
+                gamma = 0.8
             else:
-                prev_freq = freq
-                prev_gamma = gamma
-            Optimized.append({'w': W, 'w_p': w_p, 'freq': freq, 'gamma': gamma})
+                log('event', f"Network has been updated")
+                log('', f"Optimizing W...")
+                w_p, freq, gamma = optimize_w(eng, W, t, info=True, heatmap=False)
+                if w_p is None:
+                    w_p = W
+                    freq = prev_freq
+                    gamma = prev_gamma
+                else:
+                    prev_freq = freq
+                    prev_gamma = gamma
         else:
+            log('event', f"Network has been updated")
             w_p, freq, gamma = None, None, None
         # Execute the training step
         for peer in graph.peers:
@@ -62,8 +75,6 @@ def collaborate(graph: Graph, args):
     graph.join()
     log('info', f"Graph G disconnected.")
 
-    # Save Optimized
-    save("optimized_W10X10_001", Optimized)
     # get collaboration logs
     times = [peer.params.train_time for peer in graph.peers]
     total_cp_energy = sum([peer.params.cp_energy for peer in graph.peers])
@@ -111,7 +122,8 @@ def train_step(peer, t, w, w_p, freq, gamma, rounds):
             peer.params.freq = freq[peer.port - PORT][0]
         else:
             peer.params.neighbors = w[peer.port - PORT]
-        peer.train_one_epoch()
+        peer.train_one_epoch(batches=10)
+
         model = peer.get_model_params()
         full_neighbors = sum([i > 0 for i in w[peer.port - PORT]])
         neighbors_list = peer.params.neighbors.tolist().copy()
@@ -125,8 +137,8 @@ def train_step(peer, t, w, w_p, freq, gamma, rounds):
             else:
                 msize = full_model_size
             # calculate energy
-            cp_energy = compute_energy(1, len(peer.train.dataset))
-            cp_energy_opt = compute_energy(1, len(peer.train.dataset), peer.params.freq, gamma)
+            cp_energy, cp_time = compute_energy(1, len(peer.train.dataset))
+            cp_energy_opt, cp_time_opt = compute_energy(1, len(peer.train.dataset), peer.params.freq, gamma)
             ts_energy = transmission_energy(full_model_size, full_neighbors)
             ts_energy_opt = transmission_energy(msize, len(active_neighbors))
             peer.params.cp_energy += cp_energy
@@ -134,8 +146,8 @@ def train_step(peer, t, w, w_p, freq, gamma, rounds):
             peer.params.ts_energy += ts_energy
             peer.params.ts_energy_opt += ts_energy_opt
             if peer.id == 0:
-                log('success', f"Computation Energy for {peer} is "
-                               f"{cp_energy_opt:.6f} J instead of {cp_energy:.6f} J.")
+                log('success', f"Computation Energy for {peer} is [{cp_time_opt}]"
+                               f"{cp_energy_opt:.6f} J instead of [{cp_time}] {cp_energy:.6f} J.")
                 log('success', f"Transmission Energy for {peer} is [{len(active_neighbors)}] "
                                f"{ts_energy_opt:.6f} J instead of [{full_neighbors}] {ts_energy:.6f} J.")
         msg = protocol.train_step(t, model)
@@ -201,7 +213,8 @@ def update_model(peer: Node, v, evaluate=False):
 def optimize_w(eng, W, R, info=True, heatmap=False, threshold=0.001):
     matlab_matrix = matlab.double(W.tolist())
     matlab_R = matlab.double(R + 1)
-    future = eng.OPTR(matlab_matrix, matlab_R, nargout=3, background=True)
+    future = eng.OPT_Para(matlab_matrix, matlab_R, nargout=3, background=True)
+    # future = eng.OPTR(matlab_matrix, matlab_R, nargout=3, background=True)
     start_time = time.time()
     while not future.done():
         if info:
@@ -258,5 +271,6 @@ def compute_energy(epochs, D_k, f_k=2e9, gamma_k=1):
     kappa = 1e-28
     # C_k (float): CPU cycles per sample
     C_k = np.random.uniform(1, 3) * 10000 * gamma_k
-
-    return epochs * kappa * C_k * D_k * (f_k ** 2)
+    E = epochs * kappa * C_k * D_k * (f_k ** 2)
+    T = (D_k * C_k) / f_k
+    return E, T

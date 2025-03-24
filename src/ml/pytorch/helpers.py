@@ -80,22 +80,33 @@ def model_fit(peer):
     return history
 
 
-def train_for_x_epoch(peer, batches=1, evaluate=False):
-    for i in range(batches):
-        # train for x batches randomly chosen when Dataloader is set with shuffle=True
-        batch = next(iter(peer.train))
-        # execute one training step
-        optimizer = peer.params.opt_func(peer.model.parameters(), peer.params.lr)
-        loss = peer.model.train_step(batch, peer.device)
-        loss.backward()
-        optimizer.step()
-        optimizer.zero_grad()
-        # get gradients
-        # TODO review store gradients in "peer.grads"
-        # grads = []
-        # for param in peer.model.parameters():
-        #     grads.append(param.grad.view(-1))
-        # peer.grads = torch.cat(copy.deepcopy(grads))
+def train_for_x_epoch(peer, epochs=1, batches=None, evaluate=False):
+    for epoch in range(epochs):
+        if batches is None:
+            for i, batch in enumerate(peer.train):
+                optimizer = peer.params.opt_func(peer.model.parameters(), peer.params.lr)
+                loss = peer.model.train_step(batch, peer.device)
+                loss.backward()
+                optimizer.step()
+                print(f"Train loss for epoch/batch [{epoch}][{i}]: {loss.item():.6f}", end="\r")
+                optimizer.zero_grad()
+        else:
+            for i in range(batches):
+                # train for x batches randomly chosen when Dataloader is set with shuffle=True
+                batch = next(iter(peer.train))
+                # execute one training step
+                optimizer = peer.params.opt_func(peer.model.parameters(), peer.params.lr)
+                loss = peer.model.train_step(batch, peer.device)
+                print(f"Train loss for epoch/batch [{epoch}][{i}]: {loss.item():.6f}", end="\r")
+                loss.backward()
+                optimizer.step()
+                optimizer.zero_grad()
+                # get gradients
+                # TODO review store gradients in "peer.grads"
+                # grads = []
+                # for param in peer.model.parameters():
+                #     grads.append(param.grad.view(-1))
+                # peer.grads = torch.cat(copy.deepcopy(grads))
     if evaluate:
         return peer.model.evaluate(peer.val, peer.device)
 
