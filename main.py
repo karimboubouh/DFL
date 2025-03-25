@@ -18,7 +18,7 @@ if __name__ == '__main__':
     args.iid = 0
     args.unequal = 1
     args.num_users = 10
-    args.rounds = 10
+    args.rounds = 501
     args.verbose = 10
     # =================================
     fixed_seed(True)

@@ -10,7 +10,7 @@ from src.conf import EVAL_ROUND, WAIT_TIMEOUT, WAIT_INTERVAL, ML_ENGINE, PORT
 from src.ml import GAR, model_inference, compress_model, uncompress_model
 from src.p2p import Graph, Node
 from src.plots import w_heatmaps
-from src.utils import log, wait_until, load
+from src.utils import log, wait_until, load, save
 
 name = "Decentralized Federated Learning (DFL)"
 
@@ -19,11 +19,12 @@ name = "Decentralized Federated Learning (DFL)"
 
 def collaborate(graph: Graph, args):
     eng = matlab.engine.start_matlab()
-    savedW = load("Optimized_W10_201.pkl")
+    optimized = []
+    # savedW = load("Optimized_W10_444.pkl_671.pkl")
     savedW = None
     if savedW:
         log("info", f"Using previously optimized W...")
-    prev_freq = [2e9] * len(graph.peers)
+    prev_freq = [1e9] * len(graph.peers)
     prev_gamma = 1
     log("info", f"Initializing DFL...")
     # init peers parameters
@@ -39,7 +40,6 @@ def collaborate(graph: Graph, args):
             W = savedW[t]["w"]
         else:
             W = graph.update_connectivity_matrix(rho=np.random.uniform(0.7, 1))
-            print(W)
         # update peers set of neighbors
         for i, peer in enumerate(graph.peers):
             peer.params.neighbors = W[i]
@@ -49,7 +49,6 @@ def collaborate(graph: Graph, args):
                 w_p = savedW[t]["w_p"]
                 freq = savedW[t]["freq"]
                 gamma = savedW[t]["gamma"]
-                gamma = 0.8
             else:
                 log('event', f"Network has been updated")
                 log('', f"Optimizing W...")
@@ -61,6 +60,7 @@ def collaborate(graph: Graph, args):
                 else:
                     prev_freq = freq
                     prev_gamma = gamma
+            optimized.append({'w': W, 'w_p': w_p, 'freq': freq, 'gamma': gamma})
         else:
             log('event', f"Network has been updated")
             w_p, freq, gamma = None, None, None
@@ -69,6 +69,7 @@ def collaborate(graph: Graph, args):
             peer.execute(train_step, t, W, w_p, freq, gamma, graph.args.rounds)
         graph.join(t)
 
+    save("Optimized_W10_444", optimized)
     log("info", f"Evaluating the output of the collaborative training.")
     for peer in graph.peers:
         peer.execute(train_stop)
@@ -239,9 +240,9 @@ def optimize_w(eng, W, R, info=True, heatmap=False, threshold=0.001):
         row_sums = np.round(W_p.sum(axis=1), 4)
         col_sums = np.round(W_p.sum(axis=0), 4)
         log('warning', f"W_p ==>\n\tSum of rows: {row_sums}\n\tSum of cols: {col_sums} | ")
-        log('result', f"W ==>\n{np.round(W, 4)}")
-        log('result', f"W_p ==>\n{np.round(W_p, 4)}")
-        log('success', f"Gamma ==> {G} | Freq ==> {[int(x[0]) for x in F]}")
+        # log('result', f"W ==>\n{np.round(W, 4)}")
+        # log('result', f"W_p ==>\n{np.round(W_p, 4)}")
+        log('success', f"Gamma ==> {G} | Freq ==> {[ f'{x[0]:.0g}' for x in F]}")
     if heatmap:
         w_heatmaps(W, W_p, threshold=0.01)
     return W_p, F, G

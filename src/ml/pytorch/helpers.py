@@ -91,6 +91,7 @@ def train_for_x_epoch(peer, epochs=1, batches=None, evaluate=False):
                 print(f"Train loss for epoch/batch [{epoch}][{i}]: {loss.item():.6f}", end="\r")
                 optimizer.zero_grad()
         else:
+            log('info', f"Train for {batches} batch instead of {len(peer.train)} batches...")
             for i in range(batches):
                 # train for x batches randomly chosen when Dataloader is set with shuffle=True
                 batch = next(iter(peer.train))

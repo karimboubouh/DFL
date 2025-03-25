@@ -38,8 +38,8 @@ function [A, B, C] = OPT_2(W, R)
          0      0.02    0.003  0.02    0.004   0.008   0.1     0.02    0       0.004;
          25     0.00008 200    0.02    0.02    0.02    0.02    0.02   0.003   0];
 
-    C5 = 2;
-    a = 3;
+    C5 = 1; % 2
+    a = 4; % 3
     zer = zeros(10, 10);
     oness = ones(10, 10);
     d = 0.5;
@@ -50,7 +50,7 @@ function [A, B, C] = OPT_2(W, R)
     prob = optimproblem;
     Z = optimvar('Z', N, N, 'LowerBound', zer, 'UpperBound', oness);
     gam = optimvar('gam', 1, 'LowerBound', 0.1, 'UpperBound', 0.9);
-    f = optimvar('f', N, 'LowerBound', 0.1*1e9, 'UpperBound', 5*1e9);
+    f = optimvar('f', N, 'LowerBound', 1e8, 'UpperBound', 5e9);
 
     % --- Separate constraints on Z based on W ---
     % For indices where W(i,j)==0, we require Z(i,j)==0.
@@ -83,7 +83,8 @@ function [A, B, C] = OPT_2(W, R)
     end
 
     % --- Additional constraints based on indic, T_c, and T_thres ---
-    alpha = 1e-2;
+%    alpha = 0.01;
+    alpha = 0.05;
     indic = alpha ./ (alpha + exp((-Z.^2) ./ alpha));
     T_c = (I .* S .* v) ./ f;
     L = indic .* gam .* T;
@@ -113,11 +114,11 @@ function [A, B, C] = OPT_2(W, R)
 
     % Set initial guesses for the optimization variables
     x0.Z = W;
-    x0.f = ones(N, 1) * 1e6;
-    x0.gam = 0.25;
+    x0.f = ones(N, 1) * 1e9
+    x0.gam = 0.5;
 
     % --- Set timeout parameters and output function ---
-    timeout = 280;
+    timeout = 200;
     startTime = tic;
     function stop = maxTimeFcn(~, optimValues, ~)
         elapsedTime = toc(startTime);
@@ -128,15 +129,18 @@ function [A, B, C] = OPT_2(W, R)
             stop = false;
         end
     end
-
+%        "StepTolerance", 1e-10, ...
+%        "ConstraintTolerance", 1e-8, ...
+%        "Algorithm", "interior-point", ...
     opts = optimoptions("fmincon", ...
         "Display", "none", ...
         "MaxIterations", 10000, ...
         "MaxFunctionEvaluations", 500000, ...
         "OutputFcn", @maxTimeFcn, ...
-        "StepTolerance", 1e-10, ...
-        "ConstraintTolerance", 1e-8, ...
-        "Algorithm", "interior-point", ...
+        "ScaleProblem", "obj-and-constr", ...
+        "StepTolerance", 1e-6, ...
+        "ConstraintTolerance", 1e-4, ...
+        "Algorithm", "sqp", ...
         "ScaleProblem", true, ...
         "UseParallel", true);
 
@@ -147,6 +151,7 @@ function [A, B, C] = OPT_2(W, R)
     fprintf('Optimization Results:\n');
     fprintf('Current Round: %f\n', R);
     fprintf('C5: %f\n', C5);
+    fprintf('A: %f\n', a);
     fprintf('Objective value: %f\n', fval);
     fprintf('Exit flag: %d\n', eflag);
     fprintf('Number of iterations: %d\n', output.iterations);
@@ -155,11 +160,25 @@ function [A, B, C] = OPT_2(W, R)
     fprintf('Execution time: %.2f seconds\n', toc(startTime));
     fprintf('========================================\n');
 
-    if eflag == -1
-        A = -999;
-        B = -999;
-        C = -999;
+
+    % Check exit flag and use last feasible iterate if available
+    if eflag <= 0
+        if isfield(sol, 'Z') && isfield(sol, 'f') && isfield(sol, 'gam')
+            % Apply thresholding to Z even if solver failed
+            sol.Z(sol.Z < 0.09) = 0;
+            A = sol.Z;
+            B = sol.f;
+            C = sol.gam;
+            fprintf('Warning: Solver exited with flag %d. Returning last iterate.', eflag);
+        else
+            % No feasible solution found
+            A = -999;
+            B = -999;
+            C = -999;
+            fprintf('Error: No feasible iterate found.');
+        end
     else
+        % Successful convergence
         sol.Z(sol.Z < 0.09) = 0;
         A = sol.Z;
         B = sol.f;
