@@ -1,4 +1,5 @@
 import argparse
+import os
 import pickle
 import random
 import socket
@@ -21,6 +22,7 @@ args: argparse.Namespace = None
 
 def set_device(gpu):
     """Pick GPU if available, else CPU"""
+    print(f"torch.cuda.is_available(): {torch.cuda.is_available()}")
     if torch.cuda.is_available() and gpu:
         return torch.device('cuda')
     else:
@@ -66,7 +68,7 @@ def args_parser():
     parser.add_argument('--optimize_model', action='store_true', help="Compress the model using gamma")
     parser.add_argument('--epochs', type=int, default=1,
                         help="the number of local epochs: E")
-    parser.add_argument('--batch_size', type=int, default=64,
+    parser.add_argument('--batch_size', type=int, default=128,
                         help="batch size: B")
     parser.add_argument('--lr', type=float, default=0.001,
                         help='learning rate')
@@ -91,7 +93,7 @@ def args_parser():
                         help='whether to use unequal data splits for  \
                         non-i.i.d setting (use 0 for equal splits)')
     parser.add_argument('--verbose', type=int, default=2, help='verbose')
-    parser.add_argument('--seed', type=int, default=18, help='random seed')
+    parser.add_argument('--seed', type=int, default=2, help='random seed')
     global args
     args = parser.parse_args()
     return args
@@ -328,14 +330,14 @@ def active_peers(peers, frac):
     return np.random.choice(peers, m, replace=False)
 
 
-def wait_until(predicate, timeout=2, period=0.2, *args_, **kwargs):
+def wait_until(predicate, timeout=2, period=0.2, peer=None, *args, **kwargs):
     start_time = time.time()
     mustend = start_time + timeout
     while time.time() < mustend:
-        if predicate(*args_, **kwargs):
+        if predicate(peer, *args, **kwargs):
             return True
         time.sleep(period)
-    log("log", f"{predicate} finished after {time.time() - start_time} seconds.")
+    log('log', f"{peer} {predicate} finished after {time.time() - start_time} seconds.")
     return False
 
 
@@ -391,7 +393,7 @@ def labels_set(dataset):
 
 def save(filename, data):
     unique = np.random.randint(100, 999)
-    filename = f"./out/{filename}_{unique}.pkl"
+    filename = f"../out/{filename}_{unique}.pkl"
     with open(filename, 'wb') as fp:
         pickle.dump(data, fp)
         print("Writing to file", filename)
@@ -399,8 +401,14 @@ def save(filename, data):
 
 
 def load(filename):
-    with open(f"./out/{filename}", 'rb') as fp:
-        return pickle.load(fp)
+    if os.path.isfile(f"../out/{filename}"):
+        with open(f"../out/{filename}", 'rb') as fp:
+            return pickle.load(fp)
+    elif os.path.isfile(f"./out/{filename}"):
+        with open(f"./out/{filename}", 'rb') as fp:
+            return pickle.load(fp)
+    else:
+        exit(f"File :: out/{filename} does not exist.")
 
 
 def norm_squared(vi, vj):
@@ -449,3 +457,13 @@ def density_index(W):
     non_zero_elements = np.count_nonzero(W)  # Number of non-zero elements
     density_index = non_zero_elements / total_elements
     return density_index
+
+def transmission_energy_old(msg, bytes_per_param=4, neighbors=1, gamma=1, rate=7000000, P=0.1):
+    if isinstance(msg, int):
+        dim = msg
+    else:
+        dim = len(msg)
+    size = dim * bytes_per_param
+    T = (gamma * size) / rate
+    E = T * P * neighbors
+    return E, T

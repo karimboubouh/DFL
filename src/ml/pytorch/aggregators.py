@@ -13,6 +13,41 @@ def average(gradients):
     else:
         return gradients[0]
 
+def sparsified_average_old(gradients):
+    if len(gradients) > 1:
+        # Mask zeros and compute the sum and count of non-zero elements
+        non_zero_mask = gradients != 0.0
+        sums = torch.sum(gradients, dim=0)
+        counts = torch.sum(non_zero_mask, dim=0)
+        # Compute mean safely, avoiding division by zero
+        mean_tensor = torch.where(counts > 0, sums / counts, torch.tensor(0.0))
+        return mean_tensor
+    else:
+        return gradients[0]
+
+import torch
+
+def sparsified_average(weights: torch.Tensor) -> torch.Tensor:
+    """Returns average after “filling in” each neighbor’s missing coords with your own values."""
+    # 1) If no neighbors, just return your model
+    if weights.size(0) == 1:
+        return weights[0]
+
+    # 2) Broadcast your dense model to match shape [n_peers, …]
+    local = weights[0]                              # shape […]
+    local_expanded = local.unsqueeze(0)             # shape [1, …]
+
+    # 3) Reconstruct each neighbor's full model by replacing zeros
+    #    with your own parameter at that position
+    full_models = torch.where(
+        weights != 0.0,     # where neighbor has sent a value
+        weights,            #   keep it
+        local_expanded      # else fall back to local
+    )                      # shape [n_peers, …]
+
+    # 4) Now do a plain element-wise average across all peers
+    return full_models.mean(dim=0)  # shape […]
+
 
 def median(gradients):
     """ Aggregate the gradients using the median aggregation rule."""

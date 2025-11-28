@@ -60,6 +60,7 @@ class Node(Thread):
             'D': sum(self.similarity.values()),
             'confidence': 1,
             'alpha': 0.9,
+            'verbose': args.verbose,
         })
         # override params if provided
         if isinstance(params, Map):

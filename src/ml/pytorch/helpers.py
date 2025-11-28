@@ -2,7 +2,8 @@ import copy
 import time
 
 from src.ml.pytorch.models import *
-from .aggregators import average, median, aksel, krum
+from .aggregators import average, sparsified_average, median, aksel, krum
+from ...conf import EVAL_ROUND
 
 
 def initialize_models(args, same=False):
@@ -84,21 +85,23 @@ def train_for_x_epoch(peer, epochs=1, batches=None, evaluate=False):
     for epoch in range(epochs):
         if batches is None:
             for i, batch in enumerate(peer.train):
-                optimizer = peer.params.opt_func(peer.model.parameters(), peer.params.lr)
+                optimizer = peer.params.opt_func(peer.model.parameters(), peer.params.lr, weight_decay=1e-4)
                 loss = peer.model.train_step(batch, peer.device)
                 loss.backward()
                 optimizer.step()
                 print(f"Train loss for epoch/batch [{epoch}][{i}]: {loss.item():.6f}", end="\r")
                 optimizer.zero_grad()
         else:
-            log('info', f"Train for {batches} batch instead of {len(peer.train)} batches...")
+            t = time.time()
             for i in range(batches):
                 # train for x batches randomly chosen when Dataloader is set with shuffle=True
                 batch = next(iter(peer.train))
                 # execute one training step
-                optimizer = peer.params.opt_func(peer.model.parameters(), peer.params.lr)
+                optimizer = peer.params.opt_func(peer.model.parameters(), peer.params.lr, weight_decay=1e-4)
                 loss = peer.model.train_step(batch, peer.device)
-                print(f"Train loss for epoch/batch [{epoch}][{i}]: {loss.item():.6f}", end="\r")
+                if peer.params.verbose > 2:
+                    print(f"{peer} >> Train loss for epoch/batch [{epoch}][{i}]: {loss.item():.6f}", end="\r")
+                # print(f"Train loss for epoch/batch [epoch={epoch}][batch={i}][lr={peer.params.lr:.5f}]: {loss.item():.6f}", end="\r")
                 loss.backward()
                 optimizer.step()
                 optimizer.zero_grad()
@@ -108,6 +111,7 @@ def train_for_x_epoch(peer, epochs=1, batches=None, evaluate=False):
                 # for param in peer.model.parameters():
                 #     grads.append(param.grad.view(-1))
                 # peer.grads = torch.cat(copy.deepcopy(grads))
+            # print(f"{peer} >> Done after {round(time.time() - t, 1):.4f} seconds.")
     if evaluate:
         return peer.model.evaluate(peer.val, peer.device)
 
@@ -153,7 +157,8 @@ def GAR(peer, grads, weighted=True):
     # Weighted Gradients Aggregation rule
     grads = torch.stack(grads)
     if peer.params.gar == "average":
-        return average(grads)
+        return sparsified_average(grads)
+        # return average(grads)
     elif peer.params.gar == "median":
         return median(grads)
     elif peer.params.gar == "aksel":
@@ -164,10 +169,7 @@ def GAR(peer, grads, weighted=True):
         raise NotImplementedError()
 
 
-import torch
-
-
-def compress_model(model, gamma, pid=None):
+def compress_model(model, gamma, pid=None, t=0):
     """
     Compress the model by sparsifying its weights.
     Retain top K elements according to gamma.
@@ -190,9 +192,9 @@ def compress_model(model, gamma, pid=None):
     original_size = sum(param.numel() for param in model.state_dict().values())
     compressed_size = sum(len(param["values"]) for param in compressed_model.values())
     savings = 100 * (1 - compressed_size / original_size)
-    if pid is not None and pid == 0:
-        log('event', f"Compression Savings: Reduced model size by (gamma={gamma})  {savings:.4f}% "
-                     f"({compressed_size} out of {original_size})")
+    if pid is not None and pid == 0 and t % EVAL_ROUND == 0:
+        log('success', f"Compression model reduced by (gamma={gamma})  {savings:.4f}% "
+                       f"({compressed_size} out of {original_size})")
 
     return compressed_model, {'original': original_size, 'compressed': compressed_size}
 
@@ -209,3 +211,46 @@ def uncompress_model(compressed_model):
         model[name] = full_param_flat.view(compressed_param["shape"])
 
     return model
+
+
+def get_model_info(model: nn.Module):
+    """
+    Calculates the number of parameters and the estimated memory size of a PyTorch model.
+    """
+
+    # 1. Calculate Parameter Counts
+    total_params = sum(p.numel() for p in model.parameters())
+    trainable_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
+    non_trainable_params = total_params - trainable_params
+
+    # 2. Calculate Memory Size (in Bytes)
+    # We sum the size of Parameters (weights) AND Buffers (e.g., BatchNorm running_mean)
+
+    param_size = 0
+    for p in model.parameters():
+        param_size += p.nelement() * p.element_size()
+
+    buffer_size = 0
+    for b in model.buffers():
+        buffer_size += b.nelement() * b.element_size()
+
+    total_size_bytes = param_size + buffer_size
+    total_size_kb = total_size_bytes / 1024
+    total_size_mb = total_size_bytes / (1024 ** 2)
+
+    print("-" * 40)
+    print(f"Model: {model.__class__.__name__}")
+    print("-" * 40)
+    print(f"Total Parameters:        {total_params:,}")
+    print(f"Trainable Parameters:    {trainable_params:,}")
+    print(f"Non-Trainable Params:    {non_trainable_params:,}")
+    print("-" * 40)
+    print(f"                         {total_size_kb:.2f} KB")
+    print(f"Estimated Size (RAM):    {total_size_mb:.2f} MB")
+    print("-" * 40)
+
+    return {
+        "total_params": total_params,
+        "trainable_params": trainable_params,
+        "size_mb": total_size_mb
+    }

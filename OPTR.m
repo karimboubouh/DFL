@@ -1,4 +1,4 @@
-function [A, B, C] = OPT_2(W,R)
+function [A, B, C] = OPTR(W,R)
 
 % Suppress all warnings
 warning('off', 'all');
@@ -28,6 +28,7 @@ T_thres= [1.2500   27.4152    1.0110    50.8624    1.0216    1.0967    1.0375   
     1.0569    1.0327    1.1250    1.1577    1.1077    1.0789    1.0723    1.0327    1.2500    1.1077;
     1.0259    1.0789    1.1577    1.1577    1.1577    1.1577    1.0327    1.1577    1.1250    1.2500];
 
+
 T= [0	30	0.00007	0.3	0.03	0.005	0.01	0.002	0.01	0.01;
 0.02	0	10	0.07	0.13	0.02	0.02	0.02	0.02	0.002;
 0.05	0.02	0	0.02	0.02	0.8	15	8	0.02	0.02;
@@ -41,7 +42,7 @@ T= [0	30	0.00007	0.3	0.03	0.005	0.01	0.002	0.01	0.01;
 
 
 %C5=10;
-C5=2;
+C5=0.3;
 %R=10;
 a=3;
 
@@ -61,7 +62,9 @@ prob = optimproblem;
 Z = optimvar('Z',N,N,'LowerBound',zer,'UpperBound',oness);
 gam = optimvar('gam',1,'LowerBound',0.1,'UpperBound',0.9);
 %f = optimvar('f',N,'LowerBound',10^6,'UpperBound',10^9);
-f = optimvar('f',N,'LowerBound',0.1*10^9,'UpperBound',5*10^9);
+f = optimvar('f',N,'LowerBound',0.8*10^9,'UpperBound',4*10^9);
+
+
 
 %now lets define the constraints
 consz = optimeq(N,N);
@@ -75,7 +78,9 @@ for i = 1:N
 end
 consconv = optimineq(1);
 
-consconv =  norm(Z, 'fro')^2 <=  2 + a - 2*(1+a)/(gam*C5*sqrt(R));
+% consconv = norm(Z, 'fro')^2 <=  2 + a - 2*(1+a)/(gam*C5*log(R+1));
+consconv = norm(Z, 'fro')^2 <=  2 + a - 2*(1+a)/(gam*C5*sqrt(R));
+% consconv = norm(Z, 'fro')^2 <= 12 - 6/(gam * R^0.25);
 %1 - (2 /(C5 * sqrt(R)))
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
@@ -123,7 +128,7 @@ prob.Objective=obj;
 %x0.Z=zer;
 x0.Z=W;
 x0.f=ones(N,1)*10^6;
-x0.gam=0.25;
+x0.gam=1;
 
 
 %opts=optimoptions("fmincon",Display="iter",MaxIterations=10000,PlotFcn={@optimplotx, @optimplotfval},MaxFunctionEvaluations = 300000, ScaleProblem=true);
@@ -167,6 +172,8 @@ fprintf('Exit flag: %d\n', eflag);
 fprintf('Number of iterations: %d\n', output.iterations);
 fprintf('Number of function evaluations: %d\n', output.funcCount);
 fprintf('First-order optimality: %e\n', output.firstorderopt);
+fprintf('Frequency: %e\n', sol.f);
+fprintf('Gamma: %e\n', sol.gam);
 fprintf('Execution time: %.2f seconds\n', toc(startTime));
 fprintf('========================================\n');
 

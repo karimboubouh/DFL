@@ -1,7 +1,7 @@
-# On the Energy Efficiency of P2P Personalized Machine Learning using Mobile Devices
+# When Peers Decide: Optimizing Energy in Decentralized Federated Learning
 
-This repository contains the code to run simulations for the "*On the Advantages of P2P ML on Mobile Devices*" paper, submitted in *ACM e-Energy 2022* conference.
-The repository includes the implementation of the P3 algorithm on a simulated environment, and the implementation of the P3 algorithm on Android.
+This repository contains the code to run simulations for the "*When Peers Decide: Optimizing Energy in Decentralized Federated Learning*" paper.
+The repository includes the implementation of the DFL algorithm on a simulated environment.
 
 ### Requirements
 
@@ -23,17 +23,8 @@ To configure the ML Engine, update the following line in `src/conf.py`
 ``
 ML_ENGINE = "PyTorch"  # "NumPy" or "PyTorch"
 ``
-**NB:** Android implementation does not support PyTorch.
 
-## Evaluation of P3 
-
-### Configuration
-
-To build the random topology of the P2P network, we use the graph density parameter `rho` to estimate the number of neighbors for each nodes. In our experiments, we use the following:
-
-- For 10 peers: `rho=0.4`
-- For 100 peers: `rho=0.8`
-- For 300 peers: `rho=0.95`
+## Configuration
 
 The main algorithm parameters are the following:
 
@@ -51,43 +42,11 @@ The main algorithm parameters are the following:
 | --iid        | Data distribution, default set to IID. Set to 0 for non-IID.                      |
 | --unequal    | Whether to use unequal data splits for non-i.i.d setting (use 0 for equal splits) |
 
-### Execution of Personalized P2P (P3)
+### Execution of DFL
 
-To reproduce the experiments of model performance in the paper use the following command:
+Example of starting model training as in the paper:
 
-- IID data partitioning
-
-`python main.py --num_users=100 --model=mlp --dataset=mnist --iid=1 --round=500`
-
-- Balanced non-IID partitioning
-
-`python main.py --num_users=100 --model=mlp --dataset=mnist --iid=0 --unequal=0 --round=500`
-
-- Unbalanced non-IID partitioning
-
-`python main.py --num_users=100 --model=mlp --dataset=mnist --iid=0 --unequal=1 --round=500`
-
-- Network density:
-
-Change the values of parameter $\rho$
-
-```python
-topology = random_graph(models, rho=0.95)  # 0, 0.4, 0.7, 0.95, 0.99
-```
-
-
-
-### Execution of Centralized Learning (CL)
-
-`python main_CL.py--model=mlp --dataset=mnist`
-
-### Execution of Model Propagation (MP)
-
-`python main_MP.py --num_users=100 --model=mlp --dataset=mnist --iid=1 --round=500`
-
-### Execution of FedAvg (FL)
-
-`python main_FL.py --num_users=100 --model=mlp --dataset=mnist --iid=1 --round=500`
+`python main.py --num_users=10 --model=mlp --dataset=mnist --iid=0 --unequal=0 --round=500`
 
 ## Energy Analysis
 
@@ -106,7 +65,7 @@ We have used the following packages: `powerstat`, `cset-shield`, `cpupower`.
 
 To measure the energy consumption of the whole program run the following:
 
-`./run.sh -c 0 -p avg -r 1 -d 2 -e "python main.py" -a "--num_users=100 --model=mlp"`
+`./run.sh -c 0 -p avg -r 1 -d 2 -e "python main.py" -a "--num_users=10 --model=mlp"`
 
 Run `./run.sh -h` to get a list of the available options and what are used for.
 
